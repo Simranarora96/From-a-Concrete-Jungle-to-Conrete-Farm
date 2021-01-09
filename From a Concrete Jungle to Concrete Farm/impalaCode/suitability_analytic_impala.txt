@@ -1,0 +1,76 @@
+[compute-1-1:21000] > create external table socNTA(GeoName string, GeoID string, Borough string, TotalHouseholds int, AvgHouseholdSize float, Pop25AndOver int, LessThan9 int, 9to12NoDip int, MarriedCoupleFam int, SingleMaleParentFam int, SingleFemaleParentFam int) row format delimited fields terminated by ',' location '/user/jma587/project/soc_output';
+
+[compute-1-1:21000] > create external table demoNTA(GeoName string,GeoID string,Borough string,TotalPopulation int,MalePop int,FemalePop int,Under5 int,5to9 int,10to14 int,15to19 int,20to24 int,25to29 int,30to34 int,35to39 int,40to44 int,45to49 int,50to54 int, 55to59 int, 60to64 int, 65to69 int,70to74 int,75to79 int,80to84 int,85AndOver int) row format delimited fields terminated by ',' location '/user/jma587/project/demo_output';
+
+[compute-1-1:21000] > create external table econNTA(GeoName string,GeoID string,Borough string,CivilianLabourForce int,CivilianLabourForceUnemployed int,PopWPovertyStatus int,PopBelowPeverty int,HouseholdsWithFoodstampsOrSNAP int) row format delimited fields terminated by ',' location '/user/jma587/project/econ_output';
+
+[compute-1-1:21000] > create external table areaNTA(GeoName string,GeoID string,Borough string,AreaSqFt float) row format delimited fields terminated by ',' location '/user/jma587/project/area_output';
+
+[compute-1-1:21000] > create table allNTA as select a.geoid, a.geoname, a.borough, areasqft, totalpopulation, malepop, femalepop, under5, 5to9, 10to14, 15to19, 20to24, 25to29, 30to34, 35to39, 40to44, 45to49, 50to54, 55to59, 60to64, 65to69, 70to74, 75to79, 80to84, 85andover, civilianlabourforce, civilianlabourforceunemployed, popwpovertystatus, popbelowpeverty, householdswithfoodstampsorsnap, totalhouseholds, avghouseholdsize, pop25andover, lessthan9, 9to12nodip, MarriedCoupleFam, SingleMaleParentFam, SingleFemaleParentFam from areanta a join demonta d on a.geoid = d.geoid join econnta e on d.geoid = e.geoid join socnta s on e.geoid = s.geoid;
+
+
+[compute-1-1:21000] > create table allNTA_prop as
+select
+t.*,
+t.popbelowpeverty / t.popwpovertystatus as prop_poverty,
+t.civilianlabourforceunemployed / t.civilianlabourforce as prop_unemployed,
+(t.lessthan9 + t.y9to12nodip) / t.pop25andover as prop_nodiploma,
+(t.singlemaleparentfam + t.singlefemaleparentfam) / (t.singlemaleparentfam + t.singlefemaleparentfam + t.marriedcouplefam) as prop_singleparent
+from allnta as t;
+
+
+[compute-1-1:21000] > create table allNTA_prop_den as
+select
+t.*,
+t.totalpopulation * (43560/ t.areasqft) as pop_den_acre 
+from allnta_prop as t;
+
+[compute-1-1:21000] > create table allNTA_prop_den_zsum as
+select
+t.*,
+((t.prop_poverty - v.prop_poverty_avg) / v.prop_poverty_stdev) + ((t.prop_unemployed - v.prop_unemployed_avg) / v.prop_unemployed_stdev) + ((t.prop_nodiploma - v.prop_nodiploma_avg) / v.prop_nodiploma_stdev) + ((t.prop_singleparent - v.prop_singleparent_avg) / v.prop_singleparent_stdev) as zsum
+from allnta_prop_den as t
+cross join (
+select
+avg(v.prop_poverty) as prop_poverty_avg,
+avg(v.prop_unemployed) as prop_unemployed_avg,
+avg(v.prop_nodiploma) as prop_nodiploma_avg,
+avg(v.prop_singleparent) as prop_singleparent_avg,
+stddev(v.prop_poverty) as prop_poverty_stdev,
+stddev(v.prop_unemployed) as prop_unemployed_stdev,
+stddev(v.prop_nodiploma) as prop_nodiploma_stdev,
+stddev(v.prop_singleparent) as prop_singleparent_stdev
+from allnta_prop_den as v) as v;
+
+[compute-1-1:21000] > create table allNTA_prop_den_zsum_quantiles
+                    > as select
+                    > t.*,
+                    > ntile(5) over (order by t.pop_den_acre asc) as pop_den_acre_bin,
+                    > ntile(5) over (order by t.zsum  asc) as zsum_bin
+                    > from allNTA_prop_den_zsum as t;
+
+[compute-1-1:21000] > create table allNTA_prop_den_zsum_quantiles_ranks
+as
+select
+t.*,
+case
+when t.pop_den_acre_bin=1 then 0
+when t.pop_den_acre_bin=2 then 2
+when t.pop_den_acre_bin=3 then 5
+when t.pop_den_acre_bin=4 then 8
+when t.pop_den_acre_bin=5 then 10
+end as pop_den_acre_rank,
+case
+when t.zsum_bin=1 then 0
+when t.zsum_bin=2 then 2
+when t.zsum_bin=3 then 5
+when t.zsum_bin=4 then 8
+when t.zsum_bin=5 then 10
+end as zsum_rank
+from allNTA_prop_den_zsum_quantiles as t;
+
+[compute-1-1:21000] > create table allNTA_prop_den_zsum_quantiles_ranks_scores as
+                    > select
+                    > t.*,
+                    > (0.46 * t.zsum_rank) + (0.13 * t.pop_den_acre_rank) as score
+                    > from allNTA_prop_den_zsum_quantiles_ranks as t;

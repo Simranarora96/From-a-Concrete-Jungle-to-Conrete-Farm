@@ -1,0 +1,43 @@
+NUMBER OF PRODUCTS PER ORDER
+-------------------------------------------------
+SELECT X.COUNT_PRODUCTID, COUNT(X.ord_id)
+FROM (SELECT order_id AS ORD_ID, COUNT(product_id) AS COUNT_PRODUCTID
+from grocery_orders
+GROUP BY order_id) AS X
+GROUP BY X.COUNT_PRODUCTID
+ORDER BY COUNT(x.ord_id) DESC;
+
+TOTAL ORDERS BY DAY OF WEEK
+-------------------------------------------------
+SELECT order_dow, COUNT(order_id)
+FROM order_details
+GROUP BY order_dow
+ORDER BY order_dow;
+
+TOTAL ORDERS BY HOUR OF THE DAY
+-------------------------------------------------
+SELECT order_hour_of_day, COUNT(order_id)
+FROM order_details
+GROUP BY order_hour_of_day
+ORDER BY order_hour_of_day
+
+MOST ORDERED PRODUCTS
+-------------------------------------------------
+SELECT product_name, NUM
+FROM products
+INNER JOIN (SELECT grocery_orders.product_id, COUNT(grocery_orders.product_id) AS NUM
+FROM grocery_orders
+GROUP BY product_id) fullsales ON fullsales.product_id = products.product_id
+ORDER BY NUM DESC
+LIMIT 20;
+
+% OF ORDER BY DEPARTMENT (PRODUCE AS A % of ORDERS)
+-------------------------------------------------
+SELECT order_id, SUM(CASE WHEN department = 'produce' THEN 1 ELSE 0 END) AS produce_count, COUNT(product_id) AS product_count
+FROM (SELECT X.order_id, X.product_id, X.department_id, department
+FROM (SELECT grocery_orders.order_id, grocery_orders.product_id, department_id
+FROM grocery_orders LEFT Join products on grocery_orders.product_id = products.product_id) AS X
+LEFT JOIN departments ON X.department_id = departments.department_id) AS Z
+GROUP BY order_id
+ORDER BY produce_count DESC
+LIMIT 10;

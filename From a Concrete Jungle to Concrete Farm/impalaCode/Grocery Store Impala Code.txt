@@ -1,0 +1,9 @@
+>> create external table project1 (County string, City string, State string, Zip string, Square_Foot int)row format delimited fields terminated by ',' location '/user/sa5476/project_01/Impaladata/';
+
+>> show tables;
+
+>> decribe project1;
+
+>> select w.zip, w.Square_Foot from (select zip, sum(Square_Foot) as Square_Foot from project1 group by zip) w;
+
+>> select w.County, w.Square_Foot from (select County, sum(Square_Foot) as Square_Foot from project1 group by County) w;
